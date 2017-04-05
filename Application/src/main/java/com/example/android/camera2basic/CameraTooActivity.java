@@ -7,6 +7,7 @@ package com.example.android.camera2basic;
 import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -42,6 +43,7 @@ import java.util.List;
  * A basic demonstration of how to write a point-and-shoot camera app against the new
  * android.hardware.camera2 API.
  * https://android.googlesource.com/platform/frameworks/base/+/ee699a6/tests/Camera2Tests/CameraToo/src/com/example/android/camera2/cameratoo/CameraTooActivity.java
+ * https://github.com/spinaki/platform_frameworks_base/blob/master/tests/Camera2Tests/CameraToo/src/com/example/android/camera2/cameratoo/CameraTooActivity.java
  */
 public class CameraTooActivity extends Activity {
     /** Output files will be saved as /sdcard/Pictures/cameratoo*.jpg */
@@ -126,7 +128,7 @@ public class CameraTooActivity extends Activity {
         super.onPause();
         try {
             // Ensure SurfaceHolderCallback#surfaceChanged() will run again if the user returns
-//            mSurfaceView.getHolder().setFixedSize(2592, 1944);
+            mSurfaceView.getHolder().setFixedSize(/*width*/0, /*height*/0);
             // Cancel any stale preview jobs
             if (mCaptureSession != null) {
                 mCaptureSession.close();
@@ -228,8 +230,12 @@ public class CameraTooActivity extends Activity {
                             // Set the SurfaceHolder to use the camera's largest supported size
                             Log.i(TAG, "Preview size: " + optimalSize);
                             SurfaceHolder surfaceHolder = mSurfaceView.getHolder();
-                            surfaceHolder.setFixedSize(optimalSize.getWidth(),
-                                    optimalSize.getHeight());
+                            final int orientation = getResources().getConfiguration().orientation;
+                            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                                surfaceHolder.setFixedSize(optimalSize.getWidth(), optimalSize.getHeight());
+                            } else {
+                                surfaceHolder.setFixedSize(optimalSize.getHeight(), optimalSize.getWidth());
+                            }
                             mCameraId = cameraId;
                             return;
                             // Control flow continues with this method one more time

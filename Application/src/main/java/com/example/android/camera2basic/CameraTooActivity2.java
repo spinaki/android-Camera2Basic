@@ -4,30 +4,31 @@ package com.example.android.camera2basic;
  * Created by pinaki on 3/19/17.
  */
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
-import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Looper;
-import android.util.Size;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
+import android.util.Size;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -47,6 +48,7 @@ public class CameraTooActivity2 extends Activity {
     static final String CAPTURE_FILENAME_PREFIX = "cameratoo";
     /** Tag to distinguish log prints. */
     static final String TAG = "CameraToo";
+
     /** An additional thread for running tasks that shouldn't block the UI. */
     HandlerThread mBackgroundThread;
     /** Handler for running tasks in the background. */
@@ -63,6 +65,7 @@ public class CameraTooActivity2 extends Activity {
     CameraDevice mCamera;
     /** Our image capture session. */
     CameraCaptureSession mCaptureSession;
+
     /**
      * Given {@code choices} of {@code Size}s supported by a camera, chooses the smallest one whose
      * width and height are at least as large as the respective requested values.
@@ -79,6 +82,7 @@ public class CameraTooActivity2 extends Activity {
                 bigEnough.add(option);
             }
         }
+
         // Pick the smallest of those, assuming we found any
         if (bigEnough.size() > 0) {
             return Collections.min(bigEnough, new CompareSizesByArea());
@@ -87,6 +91,7 @@ public class CameraTooActivity2 extends Activity {
             return choices[0];
         }
     }
+
     /**
      * Compares two {@code Size}s based on their areas.
      */
@@ -98,34 +103,42 @@ public class CameraTooActivity2 extends Activity {
                     (long) rhs.getWidth() * rhs.getHeight());
         }
     }
+
     /**
      * Called when our {@code Activity} gains focus. <p>Starts initializing the camera.</p>
      */
     @Override
     protected void onResume() {
         super.onResume();
+
         // Start a background thread to manage camera requests
         mBackgroundThread = new HandlerThread("background");
         mBackgroundThread.start();
         mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
         mForegroundHandler = new Handler(getMainLooper());
+
         mCameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
+
         // Inflate the SurfaceView, set it as the main layout, and attach a listener
         View layout = getLayoutInflater().inflate(R.layout.cameratoo, null);
         mSurfaceView = (SurfaceView) layout.findViewById(R.id.mainSurfaceView);
         mSurfaceView.getHolder().addCallback(mSurfaceHolderCallback);
         setContentView(mSurfaceView);
+
         // Control flow continues in mSurfaceHolderCallback.surfaceChanged()
     }
+
     /**
      * Called when our {@code Activity} loses focus. <p>Tears everything back down.</p>
      */
     @Override
     protected void onPause() {
         super.onPause();
+
         try {
             // Ensure SurfaceHolderCallback#surfaceChanged() will run again if the user returns
             mSurfaceView.getHolder().setFixedSize(/*width*/0, /*height*/0);
+
             // Cancel any stale preview jobs
             if (mCaptureSession != null) {
                 mCaptureSession.close();
@@ -137,6 +150,7 @@ public class CameraTooActivity2 extends Activity {
                 mCamera = null;
             }
         }
+
         // Finish processing posted messages, then join on the handling thread
         mBackgroundThread.quitSafely();
         try {
@@ -144,9 +158,11 @@ public class CameraTooActivity2 extends Activity {
         } catch (InterruptedException ex) {
             Log.e(TAG, "Background worker thread was interrupted while joined", ex);
         }
+
         // Close the ImageReader now that the background thread has stopped
         if (mCaptureBuffer != null) mCaptureBuffer.close();
     }
+
     /**
      * Called when the user clicks on our {@code SurfaceView}, which has ID {@code mainSurfaceView}
      * as defined in the {@code mainactivity.xml} layout file. <p>Captures a full-resolution image
@@ -170,16 +186,20 @@ public class CameraTooActivity2 extends Activity {
         } else {
             Log.e(TAG, "User attempted to perform a capture outside our session");
         }
+
         // Control flow continues in mImageCaptureListener.onImageAvailable()
     }
+
     /**
      * Callbacks invoked upon state changes in our {@code SurfaceView}.
      */
     final SurfaceHolder.Callback mSurfaceHolderCallback = new SurfaceHolder.Callback() {
         /** The camera device to use, or null if we haven't yet set a fixed surface size. */
         private String mCameraId;
+
         /** Whether we received a change callback after setting our fixed surface size. */
         private boolean mGotSecondCallback;
+
         @Override
         public void surfaceCreated(SurfaceHolder holder) {
             // This is called every time the surface returns to the foreground
@@ -187,12 +207,14 @@ public class CameraTooActivity2 extends Activity {
             mCameraId = null;
             mGotSecondCallback = false;
         }
+
         @Override
         public void surfaceDestroyed(SurfaceHolder holder) {
             Log.i(TAG, "Surface destroyed");
             holder.removeCallback(this);
             // We don't stop receiving callbacks forever because onResume() will reattach us
         }
+
         @Override
         public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
             // On the first invocation, width and height were automatically set to the view's size
@@ -207,16 +229,19 @@ public class CameraTooActivity2 extends Activity {
                             Log.i(TAG, "Found a back-facing camera");
                             StreamConfigurationMap info = cameraCharacteristics
                                     .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+
                             // Bigger is better when it comes to saving our image
                             Size largestSize = Collections.max(
                                     Arrays.asList(info.getOutputSizes(ImageFormat.JPEG)),
                                     new CompareSizesByArea());
+
                             // Prepare an ImageReader in case the user wants to capture images
                             Log.i(TAG, "Capture size: " + largestSize);
                             mCaptureBuffer = ImageReader.newInstance(largestSize.getWidth(),
                                     largestSize.getHeight(), ImageFormat.JPEG, /*maxImages*/2);
                             mCaptureBuffer.setOnImageAvailableListener(
                                     mImageCaptureListener, mBackgroundHandler);
+
                             // Danger, W.R.! Attempting to use too large a preview size could
                             // exceed the camera bus' bandwidth limitation, resulting in
                             // gorgeous previews but the storage of garbage capture data.
@@ -224,13 +249,21 @@ public class CameraTooActivity2 extends Activity {
                                     mSurfaceView.getWidth() + 'x' + mSurfaceView.getHeight());
                             Size optimalSize = chooseBigEnoughSize(
                                     info.getOutputSizes(SurfaceHolder.class), width, height);
+
                             // Set the SurfaceHolder to use the camera's largest supported size
                             Log.i(TAG, "Preview size: " + optimalSize);
                             SurfaceHolder surfaceHolder = mSurfaceView.getHolder();
-                            surfaceHolder.setFixedSize(optimalSize.getWidth(),
-                                    optimalSize.getHeight());
+                            final int orientation = getResources().getConfiguration().orientation;
+                            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                                surfaceHolder.setFixedSize(optimalSize.getWidth(), optimalSize.getHeight());
+                            } else {
+                                surfaceHolder.setFixedSize(optimalSize.getHeight(), optimalSize.getWidth());
+                            }
+
+
                             mCameraId = cameraId;
                             return;
+
                             // Control flow continues with this method one more time
                             // (since we just changed our own size)
                         }
@@ -238,6 +271,7 @@ public class CameraTooActivity2 extends Activity {
                 } catch (CameraAccessException ex) {
                     Log.e(TAG, "Unable to list cameras", ex);
                 }
+
                 Log.e(TAG, "Didn't find any back-facing cameras");
                 // This is the second time the method is being invoked: our size change is complete
             } else if (!mGotSecondCallback) {
@@ -245,17 +279,24 @@ public class CameraTooActivity2 extends Activity {
                     Log.e(TAG, "Aborting camera open because it hadn't been closed");
                     return;
                 }
+
                 // Open the camera device
                 try {
+                    if (ContextCompat.checkSelfPermission(CameraTooActivity2.this, Manifest.permission.CAMERA)
+                            != PackageManager.PERMISSION_GRANTED) {
+                        return;
+                    }
                     mCameraManager.openCamera(mCameraId, mCameraStateCallback,
                             mBackgroundHandler);
                 } catch (CameraAccessException ex) {
                     Log.e(TAG, "Failed to configure output surface", ex);
                 }
                 mGotSecondCallback = true;
+
                 // Control flow continues in mCameraStateCallback.onOpened()
             }
         }};
+
     /**
      * Calledbacks invoked upon state changes in our {@code CameraDevice}. <p>These are run on
      * {@code mBackgroundThread}.</p>
@@ -274,16 +315,20 @@ public class CameraTooActivity2 extends Activity {
                     } catch (CameraAccessException ex) {
                         Log.e(TAG, "Failed to create a capture session", ex);
                     }
+
                     // Control flow continues in mCaptureSessionListener.onConfigured()
                 }
+
                 @Override
                 public void onDisconnected(CameraDevice camera) {
                     Log.e(TAG, "Camera was disconnected");
                 }
+
                 @Override
                 public void onError(CameraDevice camera, int error) {
                     Log.e(TAG, "State error on device '" + camera.getId() + "': code " + error);
                 }};
+
     /**
      * Callbacks invoked upon state changes in our {@code CameraCaptureSession}. <p>These are run on
      * {@code mBackgroundThread}.</p>
@@ -294,6 +339,7 @@ public class CameraTooActivity2 extends Activity {
                 public void onConfigured(CameraCaptureSession session) {
                     Log.i(TAG, "Finished configuring camera outputs");
                     mCaptureSession = session;
+
                     SurfaceHolder holder = mSurfaceView.getHolder();
                     if (holder != null) {
                         try {
@@ -302,6 +348,7 @@ public class CameraTooActivity2 extends Activity {
                                     mCamera.createCaptureRequest(mCamera.TEMPLATE_PREVIEW);
                             requestBuilder.addTarget(holder.getSurface());
                             CaptureRequest previewRequest = requestBuilder.build();
+
                             // Start displaying preview images
                             try {
                                 session.setRepeatingRequest(previewRequest, /*listener*/null,
@@ -317,14 +364,17 @@ public class CameraTooActivity2 extends Activity {
                         Log.e(TAG, "Holder didn't exist when trying to formulate preview request");
                     }
                 }
+
                 @Override
                 public void onClosed(CameraCaptureSession session) {
                     mCaptureSession = null;
                 }
+
                 @Override
                 public void onConfigureFailed(CameraCaptureSession session) {
                     Log.e(TAG, "Configuration error on device '" + mCamera.getId());
                 }};
+
     /**
      * Callback invoked when we've received a JPEG image from the camera.
      */
@@ -334,8 +384,10 @@ public class CameraTooActivity2 extends Activity {
                 public void onImageAvailable(ImageReader reader) {
                     // Save the image once we get a chance
                     mBackgroundHandler.post(new CapturedImageSaver(reader.acquireNextImage()));
+
                     // Control flow continues in CapturedImageSaver#run()
                 }};
+
     /**
      * Deferred processor responsible for saving snapshots to disk. <p>This is run on
      * {@code mBackgroundThread}.</p>
@@ -343,9 +395,11 @@ public class CameraTooActivity2 extends Activity {
     static class CapturedImageSaver implements Runnable {
         /** The image to save. */
         private Image mCapture;
+
         public CapturedImageSaver(Image capture) {
             mCapture = capture;
         }
+
         @Override
         public void run() {
             try {
@@ -359,6 +413,7 @@ public class CameraTooActivity2 extends Activity {
                     ByteBuffer buffer = mCapture.getPlanes()[0].getBuffer();
                     Log.i(TAG, "Captured image size: " +
                             mCapture.getWidth() + 'x' + mCapture.getHeight());
+
                     // Write the image out to the chosen file
                     byte[] jpeg = new byte[buffer.remaining()];
                     buffer.get(jpeg);
